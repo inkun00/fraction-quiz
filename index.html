@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dino Fraction Adventure</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDK (Software Development Kit) v8 -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <style>
+        /* --- Font Imports --- */
+        @import url('https://fonts.googleapis.com/css2?family=Gamja+Flower&family=Jua&family=Do+Hyeon&display=swap');
+        
+        /* --- Basic Styles --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Gamja Flower', 'Jua', 'Do Hyeon', 'Comic Sans MS', cursive, sans-serif;
+            overflow: hidden;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .game-container {
+            width: 1280px;
+            height: 720px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(1);
+            overflow: hidden;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98FB98 100%);
+            user-select: none;
+        }
+
+        /* --- Heads-Up Display (HUD) --- */
+        .hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            z-index: 100;
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        #userDataDisplay {
+            font-size: 16px;
+            background: rgba(255,255,255,0.7);
+            padding: 8px 15px;
+            border-radius: 15px;
+            text-align: left;
+        }
+
+        .score, .timer, .lives {
+            padding: 10px 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            border-width: 3px;
+            border-style: solid;
+        }
+
+        .score { background: #f39c12; border-color: #e67e22; }
+        .timer { background: #9b59b6; border-color: #8e44ad; color: white; }
+        .lives { background: #e74c3c; border-color: #c0392b; color: white; }
+
+        /* --- Background Animations --- */
+        .ground, .grass-layer, .trees, .clouds {
+            position: absolute;
+            left: 0;
+        }
+
+        .ground {
+            bottom: 0;
+            width: 200%;
+            height: 135px; /* 18.75vh of 720px */
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><path fill="%23D2B48C" d="M0 20 V12 C20 8, 40 15, 60 12 C80 9, 100 18, 100 18 V20 Z" /><path fill="%238B4513" d="M0 20 V15 C15 12, 30 18, 50 15 C70 12, 85 20, 100 20 Z" opacity="0.3" /></svg>') 0 0 / 100px 100%;
+            animation: scrollGround 10s linear infinite;
+        }
+        @keyframes scrollGround { 100% { transform: translateX(-50%); } }
+
+        .grass-layer {
+            bottom: 108px; /* 15vh of 720px */
+            width: 300%;
+            height: 72px; /* 10vh of 720px */
+            background-image: linear-gradient(0deg, transparent 0%, transparent 20%, #32CD32 20%, #32CD32 40%, transparent 40%), linear-gradient(0deg, transparent 10%, transparent 30%, #228B22 30%, #228B22 50%, transparent 50%), linear-gradient(0deg, transparent 20%, transparent 40%, #90EE90 40%, #90EE90 60%, transparent 60%);
+            background-size: 42px 72px, 64px 72px, 85px 72px;
+            animation: scrollGrass 7.5s linear infinite;
+            z-index: 10;
+        }
+        @keyframes scrollGrass { 100% { transform: translateX(-33.33%); } }
+
+        .trees {
+            bottom: 117px; /* 16.25vh of 720px */
+            width: 400%;
+            height: 360px; /* 50vh of 720px */
+            z-index: 5;
+            animation: scrollTrees 15s linear infinite;
+        }
+        @keyframes scrollTrees { 100% { transform: translateX(-25%); } }
+        
+        .tree { position: absolute; font-size: 160px; bottom: 0; }
+        .tree:nth-child(1) { left: 10%; } .tree:nth-child(2) { left: 25%; }
+        .tree:nth-child(3) { left: 40%; } .tree:nth-child(4) { left: 55%; }
+        .tree:nth-child(5) { left: 70%; } .tree:nth-child(6) { left: 85%; }
+        .tree:nth-child(7) { left: 100%; } .tree:nth-child(8) { left: 115%; }
+
+        .clouds {
+            top: 10%;
+            width: 200%;
+            height: 90px; /* 12.5vh of 720px */
+            background-image: radial-gradient(circle at 20% 50%, white 32px, transparent 32px), radial-gradient(circle at 40% 30%, white 26px, transparent 26px), radial-gradient(circle at 60% 60%, white 37px, transparent 37px), radial-gradient(circle at 80% 40%, white 30px, transparent 30px);
+            animation: scrollClouds 18s linear infinite;
+            opacity: 0.8;
+        }
+        @keyframes scrollClouds { 100% { transform: translateX(-50%); } }
+
+        /* --- Dinosaur & Problem Elements --- */
+        .dinosaur {
+            position: absolute;
+            bottom: 135px; /* 18.75vh of 720px */
+            left: 35%;
+            transition: all 0.8s ease;
+            z-index: 50;
+            filter: drop-shadow(3px 3px 6px rgba(0,0,0,0.3));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Dinosaur Evolution Stages */
+        .dinosaur.egg { width: 53px; height: 45px; font-size: 42px; }
+        .dinosaur.egg::before { content: "🥚"; }
+        .dinosaur.baby { width: 106px; height: 90px; font-size: 96px; transform: scaleX(-1); filter: hue-rotate(60deg) saturate(1.3) brightness(1.1); }
+        .dinosaur.baby::before { content: "🦕"; }
+        .dinosaur.medium { width: 160px; height: 135px; font-size: 138px; transform: scaleX(-1); filter: hue-rotate(180deg) saturate(1.4) brightness(1.0); }
+        .dinosaur.medium::before { content: "🦕"; }
+        .dinosaur.adult { width: 213px; height: 180px; font-size: 192px; transform: scaleX(-1); filter: hue-rotate(270deg) saturate(1.5) brightness(1.1); }
+        .dinosaur.adult::before { content: "🦖"; }
+        .dinosaur.boss { width: 320px; height: 270px; font-size: 288px; animation: bossGlow 2s ease-in-out infinite alternate; transform: scaleX(-1); filter: hue-rotate(0deg) saturate(2.0) brightness(1.2); }
+        .dinosaur.boss::before { content: "🦖"; }
+        
+        @keyframes bossGlow {
+            100% { filter: drop-shadow(3px 3px 6px rgba(0,0,0,0.3)) drop-shadow(0 0 20px rgba(255,0,0,0.8)); }
+        }
+
+        /* Evolution Effect */
+        .dinosaur.evolving { animation: evolutionEffect 1s ease-in-out; }
+        @keyframes evolutionEffect {
+            25% { transform: scale(1.2) rotate(5deg); filter: brightness(1.5) drop-shadow(0 0 15px gold); }
+            50% { transform: scale(0.8) rotate(-5deg); filter: brightness(2) drop-shadow(0 0 25px gold); }
+            75% { transform: scale(1.1) rotate(3deg); filter: brightness(1.5) drop-shadow(0 0 15px gold); }
+        }
+
+        /* Jump Positions */
+        .dinosaur.jumping-low { bottom: 302px; /* 42vh of 720px */ }
+        .dinosaur.jumping-high { bottom: 378px; /* 52.5vh of 720px */ }
+
+        /* Problem & Answer Bubbles */
+        .math-problem, .answer-bubble {
+            position: absolute;
+            animation: scrollProblem 7.5s linear infinite;
+            z-index: 40;
+        }
+        @keyframes scrollProblem {
+            0% { right: -320px; }
+            100% { right: 1600px; }
+        }
+
+        .math-problem {
+            top: 108px; /* 15vh of 720px */
+            right: -320px;
+            min-width: 256px;
+            white-space: nowrap;
+            font-size: 38px;
+            font-weight: bold;
+            color: #2c3e50;
+            background: #fff;
+            padding: 14px 26px;
+            border-radius: 21px;
+            border: 4px solid #3498db;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .answer-bubble {
+            top: 252px; /* 35vh of 720px */
+            width: 128px;
+            height: 128px;
+            border-radius: 50%;
+            font-size: 30px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 4px solid;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.3);
+            background: #3498db;
+            border-color: #2980b9;
+            color: white;
+            overflow: hidden;
+        }
+        
+        /* Fraction Display Styling */
+        .fraction-display { display: flex; align-items: center; font-family: 'Jua'; }
+        .fraction-whole { font-size: 1.5em; line-height: 1; margin-right: 4px; }
+        .fraction-numerator, .fraction-denominator { font-size: 1em; line-height: 1; }
+        .fraction-line { height: 2px; background: currentColor; width: auto; min-width: 2em; }
+        .fraction-part { display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0 4px; }
+        .math-problem .fraction-whole, .math-problem .fraction-numerator, .math-problem .fraction-denominator,
+        .answer-bubble .fraction-whole, .answer-bubble .fraction-numerator, .answer-bubble .fraction-denominator {
+            font-size: inherit;
+        }
+
+        /* Speed Levels */
+        .speed-level-1 { animation-duration: 7s !important; }
+        .speed-level-2 { animation-duration: 6.5s !important; }
+        .speed-level-3 { animation-duration: 6s !important; }
+        .speed-level-4 { animation-duration: 5.5s !important; }
+        .speed-level-5 { animation-duration: 5s !important; }
+
+        /* --- Screens (Start, Game Over, Analysis) --- */
+        .game-over, .analysis-screen, .start-screen, .modal-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+        
+        .game-over, .analysis-screen, .modal-overlay { background: rgba(0, 0, 0, 0.6); }
+        .start-screen { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; }
+
+        .start-content, .game-over-content, .analysis-content, .modal-content {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 30px;
+            border: 6px solid #3498db;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+            max-width: 600px;
+        }
+
+        .game-over-content, .modal-content { border-color: #e74c3c; }
+        .analysis-content { padding: 40px; border-radius: 20px; max-width: 800px; max-height: 80vh; overflow-y: auto; }
+        
+        .game-title { font-size: 48px; font-weight: bold; color: #2c3e50; margin-bottom: 20px; text-shadow: 2px 2px 4px rgba(0,0,0,0.1); }
+        .game-description { font-size: 20px; color: #34495e; margin-bottom: 30px; line-height: 1.6; }
+        .game-description p { margin-bottom: 10px; }
+
+        .start-btn, .restart-btn, .analysis-btn, .modal-btn {
+            color: white;
+            border: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+            cursor: pointer;
+            padding: 15px 30px;
+            font-size: 20px;
+            border-radius: 25px;
+        }
+        .start-btn:hover, .restart-btn:hover, .analysis-btn:hover, .modal-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+        }
+
+        .start-btn { background: #e74c3c; border: 4px solid #c0392b; }
+        .start-btn:hover { background: #c0392b; }
+        .start-btn:disabled { background: #95a5a6; border-color: #7f8c8d; cursor: not-allowed; }
+        
+        .restart-btn { background: #3498db; border: 3px solid #2980b9; }
+        .restart-btn.close { background: #95a5a6; border-color: #7f8c8d; }
+        .game-over-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            height: 80px;
+        }
+
+        .instructions {
+            position: absolute;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.9);
+            padding: 14px 26px;
+            border-radius: 21px;
+            font-size: 19px;
+            font-weight: bold;
+            color: #2c3e50;
+            text-align: center;
+            border: 3px solid #3498db;
+        }
+        
+        .loading-spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #3498db; animation: spin 1s ease infinite; margin: 0 auto; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes bounce { 40% { transform: translateY(-10px); } 60% { transform: translateY(-5px); } }
+        .bounce { animation: bounce 0.6s ease; }
+
+        /* --- Analysis Screen --- */
+        .analysis-title { font-size: 32px; font-weight: bold; color: #2c3e50; text-align: center; margin-bottom: 30px; }
+        .analysis-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 30px; }
+        .stat-item { text-align: center; }
+        .stat-label { font-size: 16px; color: #7f8c8d; margin-bottom: 5px; }
+        .stat-value { font-size: 28px; font-weight: bold; color: #2c3e50; }
+        .recommendations { margin-bottom: 30px; }
+        .recommendation-title { font-size: 24px; font-weight: bold; color: #e74c3c; margin-bottom: 15px; text-align: center; }
+        .recommendation-list { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+        .recommendation-item { background: #e74c3c; color: white; padding: 10px 20px; border-radius: 25px; font-size: 18px; font-weight: bold; border: 3px solid #c0392b; }
+        .wrong-problems { margin-bottom: 30px; }
+        .wrong-problems-title { font-size: 20px; font-weight: bold; color: #34495e; margin-bottom: 15px; text-align: center; }
+        .wrong-problem-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; max-height: 200px; overflow-y: auto; }
+        .wrong-problem-item { background: #f8f9fa; border: 2px solid #e9ecef; padding: 10px; border-radius: 10px; text-align: center; font-size: 16px; font-weight: bold; color: #495057; }
+        .analysis-buttons { display: flex; justify-content: center; gap: 15px; }
+        .analysis-btn { background: #e74c3c; border: 3px solid #c0392b; margin-top: 20px; }
+        .analysis-btn:hover { background: #c0392b; }
+        .analysis-btn.gemini { background: linear-gradient(to right, #4285F4, #34A853, #FBBC05, #EA4335); border-color: transparent; }
+        .no-problems { text-align: center; font-size: 18px; color: #27ae60; font-weight: bold; padding: 20px; background: #d5f4e6; border-radius: 15px; margin-bottom: 20px; }
+
+        /* --- Login / Modal --- */
+        .login-form { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        .login-input { padding: 12px; font-size: 16px; border-radius: 10px; border: 2px solid #bdc3c7; text-align: center;}
+        .modal-btn { background: #e74c3c; border-color: #c0392b; padding: 12px; font-size: 18px; border-radius: 10px; margin-top: 10px; }
+        .auth-buttons { display: flex; gap: 10px; justify-content: center; }
+        #authMessage, #signUpMessage {
+            margin-top: 15px;
+            font-weight: bold;
+            height: 20px;
+        }
+        .tab-btn {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            border-bottom: none;
+            border-radius: 10px 10px 0 0;
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+        .tab-btn.active {
+            background-color: white;
+            border-color: #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container" id="gameContainer">
+        <!-- Background Elements -->
+        <div class="clouds"></div>
+        <div class="trees">
+            <div class="tree">🌳</div><div class="tree">🌲</div><div class="tree">🌳</div><div class="tree">🌲</div>
+            <div class="tree">🌳</div><div class="tree">🌲</div><div class="tree">🌳</div><div class="tree">🌲</div>
+        </div>
+        <div class="grass-layer"></div>
+        <div class="ground"></div>
+        
+        <!-- Start Screen -->
+        <div class="start-screen" id="startScreen">
+            <div class="start-content">
+                <h1 class="game-title">🦕 공룡 분수 모험</h1>
+                <div id="loginFormContainer">
+                    <div class="login-form">
+                        <input type="email" id="emailInput" class="login-input" placeholder="이메일" required>
+                        <input type="password" id="passwordInput" class="login-input" placeholder="비밀번호" required>
+                        <div id="authMessage"></div>
+                        <div class="auth-buttons">
+                            <button id="loginBtn" class="restart-btn">로그인</button>
+                            <button id="showSignUpBtn" class="start-btn">회원가입</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="postLoginContainer" style="display: none;">
+                     <div id="welcomeMessage" class="text-xl my-4"></div>
+                     <div class="analysis-buttons">
+                        <button id="startGameAfterLoginBtn" class="start-btn">게임 시작</button>
+                        <button id="showLeaderboardBtnAfterLogin" class="restart-btn bg-yellow-500 hover:bg-yellow-600 border-yellow-700">🏆 리더보드</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SignUp Modal -->
+        <div class="modal-overlay" id="signUpModal">
+            <div class="modal-content">
+                <h2 class="analysis-title">회원가입</h2>
+                <div class="login-form">
+                    <input type="email" id="signUpEmailInput" class="login-input" placeholder="이메일" required>
+                    <input type="password" id="signUpPasswordInput" class="login-input" placeholder="비밀번호 (6자리 이상)" required>
+                    <input type="text" id="signUpSchoolInput" class="login-input" placeholder="학교 이름" required>
+                    <input type="text" id="signUpNicknameInput" class="login-input" placeholder="이름" required>
+                    <div id="signUpMessage"></div>
+                    <div class="auth-buttons">
+                         <button id="signUpSubmitBtn" class="start-btn">가입하기</button>
+                         <button id="closeSignUpBtn" class="restart-btn close">닫기</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Profile Screen -->
+        <div class="analysis-screen" id="profileScreen">
+            <div class="analysis-content">
+                <h2 class="analysis-title">📊 나의 프로필</h2>
+                <div class="analysis-stats">
+                    <div class="stat-item p-4 bg-gray-100 rounded-lg">
+                        <div class="stat-label">레벨</div>
+                        <div id="profileLevel" class="stat-value">0</div>
+                    </div>
+                    <div class="stat-item p-4 bg-gray-100 rounded-lg">
+                        <div class="stat-label">누적 경험치</div>
+                        <div id="profileTotalXp" class="stat-value">0</div>
+                    </div>
+                    <div class="stat-item p-4 bg-gray-100 rounded-lg col-span-2">
+                        <div class="stat-label">최고 점수</div>
+                        <div id="profileHighScore" class="stat-value">0</div>
+                    </div>
+                    <div class="stat-item p-4 bg-green-100 rounded-lg">
+                        <div class="stat-label text-green-700">잘하는 계산</div>
+                        <div id="profileStrengths" class="stat-value text-green-700 text-xl">기록 없음</div>
+                    </div>
+                    <div class="stat-item p-4 bg-red-100 rounded-lg">
+                        <div class="stat-label text-red-700">부족한 계산</div>
+                        <div id="profileWeaknesses" class="stat-value text-red-700 text-xl">기록 없음</div>
+                    </div>
+                </div>
+                <div class="analysis-buttons">
+                    <button id="startGameFromProfileBtn" class="start-btn">게임 시작!</button>
+                    <button id="logoutBtn" class="restart-btn close">로그아웃</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- In-Game HUD -->
+        <div class="hud" id="gameHud" style="display: none;">
+            <div>
+                <div class="score">점수: <span id="score">0</span></div>
+                <div id="userDataDisplay" class="mt-2"></div>
+            </div>
+            <div class="timer">시간: <span id="timer">0:00</span></div>
+            <div class="lives">생명: <span id="lives">5</span></div>
+        </div>
+        
+        <!-- Game Character -->
+        <div class="dinosaur" id="dinosaur"></div>
+        
+        <!-- Game Over Screen -->
+        <div class="game-over" id="gameOver">
+            <div class="game-over-content">
+                <div>게임 종료!</div>
+                <div style="font-size: 24px; margin: 20px 0;">최종 점수: <span id="finalScore">0</span></div>
+                 <div id="xpGained" style="font-size: 20px; color: #27ae60; font-weight: bold;"></div>
+                <div class="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4 mt-6">
+                    <button id="leaderboardBtnGO" class="restart-btn bg-yellow-500 hover:bg-yellow-600 border-yellow-700 game-over-btn"><span>🏆</span><span>리더보드</span></button>
+                    <button id="analysisBtnGO" class="restart-btn game-over-btn"><span>📊</span><span>결과 분석</span></button>
+                    <button id="restartBtnGO" class="restart-btn game-over-btn"><span>🔄</span><span>다시 하기</span></button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Analysis Screen -->
+        <div class="analysis-screen" id="analysisScreen">
+            <div class="analysis-content">
+                <h2 class="analysis-title">📊 학습 분석 결과</h2>
+                <div class="analysis-stats">
+                    <div class="stat-item"><div class="stat-label">총 문제 수</div><div class="stat-value" id="totalProblems">0</div></div>
+                    <div class="stat-item"><div class="stat-label">정답률</div><div class="stat-value" id="accuracy">0%</div></div>
+                </div>
+                <div class="recommendations" id="recommendations"></div>
+                <div class="wrong-problems" id="wrongProblems"></div>
+                <div class="analysis-buttons">
+                    <button id="restartBtnAnalysis" class="restart-btn">🔄 다시 하기</button>
+                    <button id="hideAnalysisBtn" class="restart-btn close">닫기</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboard Screen -->
+        <div class="analysis-screen" id="leaderboardScreen">
+            <div class="analysis-content">
+                <h2 class="analysis-title">🏆 리더보드</h2>
+                <div class="flex justify-center mb-4">
+                    <button id="scoreTabBtn" class="tab-btn active">개인 최고 점수</button>
+                    <button id="xpTabBtn" class="tab-btn">개인 경험치</button>
+                    <button id="schoolTabBtn" class="tab-btn">학교별 총경험치</button>
+                </div>
+                <div id="leaderboardContent"><p>로딩 중...</p></div>
+                <div class="analysis-buttons">
+                    <button id="hideLeaderboardBtn" class="restart-btn close">닫기</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modals -->
+        <div class="modal-overlay" id="levelUpModal">
+            <div class="modal-content">
+                <h2 class="analysis-title">🎉 레벨 업! 🎉</h2>
+                <p id="levelUpText" class="text-2xl font-bold text-green-600"></p>
+                <button id="closeLevelUpBtn" class="restart-btn mt-4">확인</button>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="instructions" id="gameInstructions" style="display: none;">
+            스페이스바 또는 화면 터치로 점프하고 정답을 맞혀보세요!
+        </div>
+    </div>
+
+    <script>
+        // --- Game State Variables ---
+        let score = 0;
+        let lives = 5;
+        let gameRunning = false;
+        let isJumping = false;
+        let currentProblems = [];
+        let problemCounter = 0;
+        let spacePressed = false;
+        let jumpStartTime = 0;
+        let gameTimer;
+        let problemTimer;
+        let gameStarted = false;
+        let currentUserId = null;
+        let currentUserData = { score: 0, totalXp: 0, level: 1, correctProblemTypes: {}, wrongProblemTypes: {} };
+        
+        // --- Firebase Variables ---
+        let auth, db;
+        const firebaseErrorKorean = {
+            'auth/user-not-found': '등록되지 않은 이메일입니다.',
+            'auth/wrong-password': '비밀번호가 일치하지 않습니다.',
+            'auth/invalid-email': '아이디는 이메일 형식을 맞춰주세요.',
+            'auth/email-already-in-use': '이미 사용 중인 이메일입니다.',
+            'auth/weak-password': '비밀번호는 6자리 이상이어야 합니다.',
+            'default': '로그인 중 오류가 발생했습니다. 다시 시도해주세요.'
+        };
+
+        let currentEvolutionStage = 'egg';
+        let usedProblems = new Set();
+        const possibleDenominators = [2, 3, 4, 5, 6, 7, 8, 9, 10, 12];
+
+        // --- Analysis Tracking ---
+        let problemStats = {
+            correct: [],
+            wrong: [],
+            totalProblems: 0,
+            correctProblemTypes: {},
+            wrongProblemTypes: {}
+        };
+        
+        // --- Problem Difficulty Levels ---
+        const problemTypesByScore = {
+            level1: ['진분수+진분수', '진분수-진분수'],
+            level2: ['진분수+진분수_합1초과'],
+            level3: ['1-진분수', '자연수-진분수'],
+            level4: ['대분수-대분수', '대분수-대분수(받아내림)']
+        };
+        
+        // --- UI Element References ---
+        let gameContainer, dinosaur, scoreElement, livesElement, timerElement, gameOverElement, finalScoreElement, startScreenElement, gameHudElement, gameInstructionsElement, analysisScreenElement, leaderboardScreenElement, leaderboardContentElement, userDataDisplay, xpGainedElement, levelUpModal, levelUpText, authMessage, profileScreen, signUpModal;
+        
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize UI Element References after DOM is loaded
+            gameContainer = document.getElementById('gameContainer');
+            dinosaur = document.getElementById('dinosaur');
+            scoreElement = document.getElementById('score');
+            livesElement = document.getElementById('lives');
+            timerElement = document.getElementById('timer');
+            gameOverElement = document.getElementById('gameOver');
+            finalScoreElement = document.getElementById('finalScore');
+            startScreenElement = document.getElementById('startScreen');
+            gameHudElement = document.getElementById('gameHud');
+            gameInstructionsElement = document.getElementById('gameInstructions');
+            analysisScreenElement = document.getElementById('analysisScreen');
+            leaderboardScreenElement = document.getElementById('leaderboardScreen');
+            leaderboardContentElement = document.getElementById('leaderboardContent');
+            userDataDisplay = document.getElementById('userDataDisplay');
+            xpGainedElement = document.getElementById('xpGained');
+            levelUpModal = document.getElementById('levelUpModal');
+            levelUpText = document.getElementById('levelUpText');
+            authMessage = document.getElementById('authMessage');
+            profileScreen = document.getElementById('profileScreen');
+            signUpModal = document.getElementById('signUpModal');
+
+            const firebaseConfig = {
+              apiKey: "AIzaSyBtSox7Fg_pMG7b24BhxFaa9gt0qZ2iNcQ",
+              authDomain: "dinorun-math-c599c.firebaseapp.com",
+              projectId: "dinorun-math-c599c",
+              storageBucket: "dinorun-math-c599c.appspot.com",
+              messagingSenderId: "35446643543",
+              appId: "1:35446643543:web:fb92514e65a9b85fac3c12"
+            };
+            firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth();
+            db = firebase.firestore();
+
+            auth.onAuthStateChanged(async (user) => {
+                if (user && !user.isAnonymous) {
+                    currentUserId = user.uid;
+                    currentUserData = await loadUserData(currentUserId);
+                    showPostLoginUI();
+                } else {
+                    currentUserId = null;
+                    currentUserData = { score: 0, totalXp: 0, level: 1, correctProblemTypes: {}, wrongProblemTypes: {} };
+                    // 로그아웃 상태일 때 UI 초기화
+                    document.getElementById('loginFormContainer').style.display = 'block';
+                    document.getElementById('postLoginContainer').style.display = 'none';
+                    startScreenElement.style.display = 'flex';
+                    profileScreen.style.display = 'none';
+                }
+            });
+            
+            resizeGame();
+            
+            // ===================================================================
+            // [최종 수정] 이벤트 리스너를 올바르게 정리했습니다.
+            // ===================================================================
+            // 로그인/회원가입 관련 버튼
+            document.getElementById('loginBtn').addEventListener('click', login);
+            document.getElementById('showSignUpBtn').addEventListener('click', () => signUpModal.style.display = 'flex');
+            document.getElementById('signUpSubmitBtn').addEventListener('click', signUp);
+            document.getElementById('closeSignUpBtn').addEventListener('click', () => signUpModal.style.display = 'none');
+            
+            // 로그인 후 시작화면 버튼
+            document.getElementById('startGameAfterLoginBtn').addEventListener('click', showProfileScreen);
+            document.getElementById('showLeaderboardBtnAfterLogin').addEventListener('click', () => showLeaderboard());
+
+            // 게임 오버 화면 버튼
+            document.getElementById('leaderboardBtnGO').addEventListener('click', () => showLeaderboard());
+            document.getElementById('analysisBtnGO').addEventListener('click', showAnalysis);
+            document.getElementById('restartBtnGO').addEventListener('click', restartGame);
+
+            // 분석 화면 버튼
+            document.getElementById('restartBtnAnalysis').addEventListener('click', restartGame);
+            document.getElementById('hideAnalysisBtn').addEventListener('click', hideAnalysis);
+            
+            // 리더보드 화면 버튼
+            document.getElementById('hideLeaderboardBtn').addEventListener('click', hideLeaderboard);
+            document.getElementById('scoreTabBtn').addEventListener('click', () => showLeaderboard('score'));
+            document.getElementById('xpTabBtn').addEventListener('click', () => showLeaderboard('xp'));
+            document.getElementById('schoolTabBtn').addEventListener('click', () => showLeaderboard('school'));
+
+            // 프로필 화면 버튼
+            document.getElementById('startGameFromProfileBtn').addEventListener('click', startGame);
+            document.getElementById('logoutBtn').addEventListener('click', logout);
+            
+            // 모달 버튼
+            document.getElementById('closeLevelUpBtn').addEventListener('click', closeLevelUpModal);
+        });
+        
+        window.addEventListener('resize', resizeGame);
+
+        // --- Core Game Functions ---
+        
+        async function initializeGame() {
+            if (!currentUserId) {
+                await auth.signInAnonymously();
+            }
+            currentUserData = await loadUserData(currentUserId);
+            score = 0; // Always start a new game with 0 score
+            startGame();
+        }
+
+        function resizeGame() {
+            const baseWidth = 1280;
+            const baseHeight = 720;
+            const scale = Math.min(window.innerWidth / baseWidth, window.innerHeight / baseHeight);
+            gameContainer.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        }
+
+        function createFractionDisplay(whole, numerator, denominator) {
+            const container = document.createElement('div');
+            container.className = 'fraction-display';
+
+            if (numerator === 0 && whole === 0) {
+                container.innerHTML = `<span>0</span>`;
+                return container;
+            }
+            if (numerator === 0 && whole > 0) {
+                container.innerHTML = `<span>${whole}</span>`;
+                return container;
+            }
+
+            let resultHtml = '';
+            if (whole > 0) {
+                resultHtml += `<span class="fraction-whole">${whole}</span>`;
+            }
+            if (numerator > 0) {
+                resultHtml += `
+                    <div class="fraction-part">
+                        <span class="fraction-numerator">${numerator}</span>
+                        <div class="fraction-line"></div>
+                        <span class="fraction-denominator">${denominator}</span>
+                    </div>`;
+            }
+            container.innerHTML = resultHtml;
+            return container;
+        }
+
+        function updateDinosaurEvolution() {
+            let newStage;
+            if (score >= 400) newStage = 'boss';
+            else if (score >= 300) newStage = 'adult';
+            else if (score >= 200) newStage = 'medium';
+            else if (score >= 100) newStage = 'baby';
+            else newStage = 'egg';
+            
+            if (newStage !== currentEvolutionStage) {
+                currentEvolutionStage = newStage;
+                dinosaur.classList.add('evolving');
+                setTimeout(() => dinosaur.classList.remove('evolving'), 1000);
+            }
+            
+            dinosaur.className = 'dinosaur';
+            dinosaur.classList.add(currentEvolutionStage);
+        }
+
+        function getCurrentSpeedLevel() {
+            if (score >= 200) return 5;
+            if (score >= 150) return 4;
+            if (score >= 100) return 3;
+            if (score >= 50) return 2;
+            if (score >= 20) return 1;
+            return 0;
+        }
+
+        function startGame() {
+            gameStarted = true;
+            gameRunning = true;
+            
+            lives = 5;
+            score = 0; // Always start a new game session with 0 score
+            scoreElement.textContent = score;
+            livesElement.textContent = lives;
+            timerElement.textContent = `0:00`;
+            
+            startScreenElement.style.display = 'none';
+            profileScreen.style.display = 'none';
+            gameOverElement.style.display = 'none';
+            analysisScreenElement.style.display = 'none';
+            leaderboardScreenElement.style.display = 'none';
+            gameHudElement.style.display = 'flex';
+            gameInstructionsElement.style.display = 'block';
+            dinosaur.style.display = 'flex';
+            userDataDisplay.innerHTML = `레벨: ${currentUserData.level}<br>경험치: ${currentUserData.totalXp}`;
+            
+            updateDinosaurEvolution();
+            
+            let startTime = Date.now();
+            gameTimer = setInterval(() => {
+                if (!gameRunning) return clearInterval(gameTimer);
+                let elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+                let minutes = Math.floor(elapsedTime / 60);
+                let seconds = elapsedTime % 60;
+                timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }, 1000);
+
+            generateProblem();
+            problemTimer = setInterval(() => {
+                if (gameRunning) generateProblem();
+            }, 4000); 
+        }
+        
+        function normalizeFraction(whole, numerator, denominator) {
+            if (numerator < 0) {
+                const borrow = Math.ceil(Math.abs(numerator) / denominator);
+                whole -= borrow;
+                numerator += borrow * denominator;
+            }
+
+            if (numerator >= denominator && denominator > 0) {
+                whole += Math.floor(numerator / denominator);
+                numerator %= denominator;
+            }
+            
+            return { whole, numerator, denominator };
+        }
+
+        function generateProblem() {
+            if (!gameRunning) return;
+            
+            let problem = null;
+            let attempts = 0;
+            const maxAttempts = 100;
+            
+            while (!problem && attempts < maxAttempts) {
+                attempts++;
+                let currentProblemSet;
+                if (score < 50) currentProblemSet = problemTypesByScore.level1;
+                else if (score < 100) currentProblemSet = problemTypesByScore.level2;
+                else if (score < 150) currentProblemSet = problemTypesByScore.level3;
+                else currentProblemSet = problemTypesByScore.level4;
+                
+                const problemType = currentProblemSet[Math.floor(Math.random() * currentProblemSet.length)];
+
+                let n1, n2, d, w1, w2;
+                d = possibleDenominators[Math.floor(Math.random() * possibleDenominators.length)];
+                let answerWhole, answerNum;
+                let candidateProblem = null;
+                let innerAttempts = 0;
+                const maxInnerAttempts = 50;
+
+                switch (problemType) {
+                    case '진분수+진분수':
+                        if (d < 3) {
+                            const validDenominators = possibleDenominators.filter(den => den >= 3);
+                            d = validDenominators[Math.floor(Math.random() * validDenominators.length)];
+                        }
+                        do { 
+                            n1 = Math.floor(Math.random() * (d - 1)) + 1; 
+                            n2 = Math.floor(Math.random() * (d - 1)) + 1; 
+                            innerAttempts++;
+                        } while (n1 + n2 >= d && innerAttempts < maxInnerAttempts);
+                        if (innerAttempts >= maxInnerAttempts) continue;
+                        answerWhole = 0; answerNum = n1 + n2;
+                        candidateProblem = { type: problemType, text: `${createFractionDisplay(0, n1, d).innerHTML} + ${createFractionDisplay(0, n2, d).innerHTML}`, answer: { whole: answerWhole, numerator: answerNum, denominator: d } };
+                        break;
+                    case '진분수+진분수_합1초과':
+                        do { n1 = Math.floor(Math.random() * (d - 1)) + 1; n2 = Math.floor(Math.random() * (d - 1)) + 1; innerAttempts++; } while (n1 + n2 < d && innerAttempts < maxInnerAttempts);
+                        if (innerAttempts >= maxInnerAttempts) continue;
+                        answerWhole = 0; answerNum = n1 + n2;
+                        candidateProblem = { type: problemType, text: `${createFractionDisplay(0, n1, d).innerHTML} + ${createFractionDisplay(0, n2, d).innerHTML}`, answer: { whole: answerWhole, numerator: answerNum, denominator: d } };
+                        break;
+                    case '진분수-진분수':
+                        do { n1 = Math.floor(Math.random() * (d - 1)) + 1; n2 = Math.floor(Math.random() * (d - 1)) + 1; innerAttempts++; } while (n1 <= n2 && innerAttempts < maxInnerAttempts);
+                        if (innerAttempts >= maxInnerAttempts) continue;
+                        answerWhole = 0; answerNum = n1 - n2;
+                        candidateProblem = { type: problemType, text: `${createFractionDisplay(0, n1, d).innerHTML} - ${createFractionDisplay(0, n2, d).innerHTML}`, answer: { whole: answerWhole, numerator: answerNum, denominator: d } };
+                        break;
+                    case '대분수-대분수':
+                        w1 = Math.floor(Math.random() * 4) + 2;
+                        w2 = Math.floor(Math.random() * (w1 - 1)) + 1;
+                        do { n1 = Math.floor(Math.random() * (d - 1)) + 1; n2 = Math.floor(Math.random() * (d - 1)) + 1; innerAttempts++; } while (n1 < n2 && innerAttempts < maxInnerAttempts);
+                        if (innerAttempts >= maxInnerAttempts) continue;
+                        answerWhole = w1 - w2; answerNum = n1 - n2;
+                        candidateProblem = { type: problemType, text: `${createFractionDisplay(w1, n1, d).innerHTML} - ${createFractionDisplay(w2, n2, d).innerHTML}`, answer: { whole: answerWhole, numerator: answerNum, denominator: d } };
+                        break;
+                    case '1-진분수':
+                        n1 = Math.floor(Math.random() * (d - 1)) + 1;
+                        answerWhole = 0; answerNum = d - n1;
+                        candidateProblem = { type: problemType, text: `1 - ${createFractionDisplay(0, n1, d).innerHTML}`, answer: { whole: answerWhole, numerator: answerNum, denominator: d } };
+                        break;
+                    case '자연수-진분수':
+                        w1 = Math.floor(Math.random() * 4) + 2;
+                        n1 = Math.floor(Math.random() * (d - 1)) + 1;
+                        answerWhole = w1 - 1; answerNum = d - n1;
+                        candidateProblem = { type: problemType, text: `${w1} - ${createFractionDisplay(0, n1, d).innerHTML}`, answer: { whole: answerWhole, numerator: answerNum, denominator: d } };
+                        break;
+                    case '대분수-대분수(받아내림)':
+                        w1 = Math.floor(Math.random() * 4) + 2;
+                        w2 = Math.floor(Math.random() * (w1 - 1)) + 1;
+                        do { n1 = Math.floor(Math.random() * (d - 1)) + 1; n2 = Math.floor(Math.random() * (d - 1)) + 1; innerAttempts++; } while (n1 >= n2 && innerAttempts < maxInnerAttempts);
+                        if (innerAttempts >= maxInnerAttempts) continue;
+                        answerWhole = w1 - 1 - w2; answerNum = (n1 + d) - n2;
+                        candidateProblem = { type: problemType, text: `${createFractionDisplay(w1, n1, d).innerHTML} - ${createFractionDisplay(w2, n2, d).innerHTML}`, answer: { whole: answerWhole, numerator: answerNum, denominator: d } };
+                        break;
+                }
+                
+                if (candidateProblem) {
+                    const problemKey = JSON.stringify({ text: candidateProblem.text });
+                    if (!usedProblems.has(problemKey)) {
+                        problem = candidateProblem;
+                        usedProblems.add(problemKey);
+                    }
+                }
+            }
+            
+            if (!problem) {
+                usedProblems.clear();
+                requestAnimationFrame(generateProblem);
+                return;
+            }
+
+            const correctAnswer = normalizeFraction(problem.answer.whole, problem.answer.numerator, problem.answer.denominator);
+            const answers = [{ value: correctAnswer, isCorrect: true }];
+
+            for (let i = 0; i < 2; i++) {
+                let wrongAnswer;
+                let wrongAttempts = 0;
+                do {
+                    const wrongNum = Math.floor(Math.random() * (problem.answer.denominator * 2));
+                    const wrongWhole = Math.floor(Math.random() * (correctAnswer.whole + 2));
+                    wrongAnswer = normalizeFraction(wrongWhole, wrongNum, problem.answer.denominator);
+                    wrongAttempts++;
+                } while (answers.some(a => a.value.whole === wrongAnswer.whole && a.value.numerator === wrongAnswer.numerator) && wrongAttempts < 20);
+                answers.push({ value: wrongAnswer, isCorrect: false });
+            }
+
+            answers.sort(() => Math.random() - 0.5);
+            createProblemElements(problem, answers);
+        }
+
+        function createProblemElements(problem, answers) {
+            if (!gameRunning) return;
+
+            problemStats.totalProblems++;
+            
+            const currentProblemId = problemCounter++;
+            const speedClass = `speed-level-${getCurrentSpeedLevel()}`;
+            
+            const problemDiv = document.createElement('div');
+            problemDiv.className = `math-problem ${speedClass}`;
+            problemDiv.innerHTML = problem.text;
+            problemDiv.dataset.problemId = currentProblemId;
+            
+            const bubbleElements = answers.map(answer => {
+                const bubble = document.createElement('div');
+                bubble.className = `answer-bubble ${speedClass}`;
+                bubble.appendChild(createFractionDisplay(answer.value.whole, answer.value.numerator, answer.value.denominator));
+                bubble.dataset.correct = answer.isCorrect.toString();
+                bubble.dataset.problemId = currentProblemId;
+                return bubble;
+            });
+
+            gameContainer.appendChild(problemDiv);
+            bubbleElements.forEach((bubble, index) => {
+                setTimeout(() => {
+                    if (gameRunning) gameContainer.appendChild(bubble);
+                }, index * 500);
+            });
+
+            const problemData = {
+                id: currentProblemId,
+                elements: [problemDiv, ...bubbleElements],
+                answered: false,
+                problem: problem,
+                cleanupTimer: setTimeout(() => {
+                    if (!problemData.answered) {
+                        const unansweredProblem = problemData.problem;
+                        if (unansweredProblem) {
+                            problemStats.wrong.push(unansweredProblem);
+                            const type = unansweredProblem.type;
+                            problemStats.wrongProblemTypes[type] = (problemStats.wrongProblemTypes[type] || 0) + 1;
+                        }
+                        cleanupProblem(currentProblemId);
+                    }
+                }, 7500)
+            };
+            
+            currentProblems.push(problemData);
+        }
+
+        function cleanupProblem(problemId) {
+            const problemIndex = currentProblems.findIndex(p => p.id === problemId);
+            if (problemIndex !== -1) {
+                const problem = currentProblems[problemIndex];
+                clearTimeout(problem.cleanupTimer);
+                problem.elements.forEach(element => element?.remove());
+                currentProblems.splice(problemIndex, 1);
+            }
+        }
+        
+        function jump(holdTime = 0) {
+            if (!isJumping && gameRunning) {
+                isJumping = true;
+                dinosaur.classList.add(holdTime > 200 ? 'jumping-high' : 'jumping-low');
+                dinosaur.classList.add('bounce');
+
+                const collisionInterval = setInterval(checkCollisions, 50);
+
+                setTimeout(() => {
+                    dinosaur.classList.remove('jumping-low', 'jumping-high', 'bounce');
+                    isJumping = false;
+                    clearInterval(collisionInterval);
+                }, 600);
+            }
+        }
+
+        function checkCollisions() {
+            if (!isJumping) return;
+            const dinoRect = dinosaur.getBoundingClientRect();
+            
+            document.querySelectorAll('.answer-bubble').forEach(bubble => {
+                const bubbleRect = bubble.getBoundingClientRect();
+                const problemId = parseInt(bubble.dataset.problemId);
+                const problemData = currentProblems.find(p => p.id === problemId);
+
+                if (!problemData || problemData.answered) return;
+                
+                if (dinoRect.left < bubbleRect.right && dinoRect.right > bubbleRect.left &&
+                    dinoRect.top < bubbleRect.bottom && dinoRect.bottom > bubbleRect.top) {
+                    
+                    problemData.answered = true;
+                    
+                    const isCorrect = bubble.dataset.correct === 'true';
+                    const type = problemData.problem.type;
+
+                    if (isCorrect) {
+                        score += 10;
+                        scoreElement.textContent = score;
+                        bubble.style.background = '#2ecc71';
+                        problemStats.correct.push(problemData.problem);
+                        problemStats.correctProblemTypes[type] = (problemStats.correctProblemTypes[type] || 0) + 1;
+                    } else {
+                        lives--;
+                        livesElement.textContent = lives;
+                        bubble.style.background = '#e74c3c';
+                        problemStats.wrong.push(problemData.problem);
+                        problemStats.wrongProblemTypes[type] = (problemStats.wrongProblemTypes[type] || 0) + 1;
+                    }
+                    
+                    updateDinosaurEvolution();
+                    setTimeout(() => cleanupProblem(problemData.id), 500);
+                    
+                    if (lives <= 0) {
+                        endGame();
+                    }
+                }
+            });
+        }
+
+        function endGame() {
+            if (!gameRunning) return;
+            gameRunning = false;
+            clearInterval(gameTimer);
+            clearInterval(problemTimer);
+            currentProblems.forEach(p => clearTimeout(p.cleanupTimer));
+            
+            const earnedXp = Math.floor(score / 5); // 5점당 1XP
+            xpGainedElement.textContent = `경험치 +${earnedXp} XP`;
+            
+            const oldLevel = currentUserData.level;
+            currentUserData.totalXp += earnedXp;
+            currentUserData.level = calculateLevel(currentUserData.totalXp);
+
+            finalScoreElement.textContent = score;
+            
+            if (currentUserData.score < score) {
+                currentUserData.score = score;
+            }
+            
+            // Merge session stats with user data
+            for (const type in problemStats.correctProblemTypes) {
+                currentUserData.correctProblemTypes[type] = (currentUserData.correctProblemTypes[type] || 0) + problemStats.correctProblemTypes[type];
+            }
+            for (const type in problemStats.wrongProblemTypes) {
+                currentUserData.wrongProblemTypes[type] = (currentUserData.wrongProblemTypes[type] || 0) + problemStats.wrongProblemTypes[type];
+            }
+
+            saveUserData();
+            
+            if(currentUserData.level > oldLevel) {
+                levelUpText.textContent = `레벨 ${oldLevel} ➡ ${currentUserData.level}`;
+                levelUpModal.style.display = 'flex';
+            } else {
+                gameOverElement.style.display = 'flex';
+            }
+        }
+        
+        function closeLevelUpModal() {
+            levelUpModal.style.display = 'none';
+            gameOverElement.style.display = 'flex';
+        }
+
+        function calculateLevel(xp) {
+            return Math.floor(Math.sqrt(xp / 10)) + 1;
+        }
+
+        function restartGame() {
+            clearInterval(gameTimer);
+            clearInterval(problemTimer);
+            currentProblems.forEach(p => clearTimeout(p.cleanupTimer));
+            
+            score = 0; lives = 5;
+            gameRunning = false; gameStarted = false; isJumping = false;
+            problemCounter = 0;
+            problemStats = { correct: [], wrong: [], totalProblems: 0, correctProblemTypes: {}, wrongProblemTypes: {} };
+            usedProblems.clear();
+            
+            document.querySelectorAll('.math-problem, .answer-bubble').forEach(el => el.remove());
+            gameOverElement.style.display = 'none';
+            analysisScreenElement.style.display = 'none';
+            gameHudElement.style.display = 'none';
+            gameInstructionsElement.style.display = 'none';
+            dinosaur.style.display = 'none';
+            dinosaur.className = 'dinosaur egg';
+            startScreenElement.style.display = 'flex';
+        }
+
+        // --- Firestore & Leaderboard Functions ---
+        async function saveUserData() {
+            if (!currentUserId || !db) return;
+            
+            const userDocRef = db.collection('users').doc(currentUserId);
+            
+            const dataToSave = {
+                score: currentUserData.score,
+                totalXp: currentUserData.totalXp,
+                level: currentUserData.level,
+                correctProblemTypes: currentUserData.correctProblemTypes,
+                wrongProblemTypes: currentUserData.wrongProblemTypes,
+                school: currentUserData.school || null,
+                nickname: currentUserData.nickname || null,
+                timestamp: new Date()
+            };
+
+            try {
+                await userDocRef.set(dataToSave, { merge: true });
+
+                if (dataToSave.nickname && score > 0) {
+                    const leaderboardDocRef = db.collection('leaderboards').doc();
+                    await leaderboardDocRef.set({
+                        school: dataToSave.school,
+                        nickname: dataToSave.nickname,
+                        score: score,
+                        timestamp: new Date(),
+                        userId: currentUserId
+                    });
+                }
+            } catch (e) {
+                console.error("Error saving user data: ", e);
+            }
+        }
+        
+        async function loadUserData(userId) {
+            if (!db) return { score: 0, totalXp: 0, level: 1, correctProblemTypes: {}, wrongProblemTypes: {} };
+            const userDocRef = db.collection('users').doc(userId);
+            try {
+                const docSnap = await userDocRef.get();
+                const defaults = { score: 0, totalXp: 0, level: 1, correctProblemTypes: {}, wrongProblemTypes: {} };
+                return docSnap.exists ? { ...defaults, ...docSnap.data() } : defaults;
+            } catch (e) {
+                console.error("Error loading user data:", e);
+                return { score: 0, totalXp: 0, level: 1, correctProblemTypes: {}, wrongProblemTypes: {} }; // Return default on error
+            }
+        }
+
+        async function getLeaderboardFromFirestore(type = 'score') {
+            if (!db) return [];
+            let query;
+            if (type === 'score') {
+                query = db.collection('leaderboards').orderBy("score", "desc").limit(10);
+            } else if (type === 'xp') {
+                query = db.collection('users').orderBy("totalXp", "desc").limit(10);
+            } else if (type === 'school') {
+                const usersSnapshot = await db.collection('users').get();
+                const schoolData = {};
+                usersSnapshot.forEach(doc => {
+                    const user = doc.data();
+                    if(user.school && user.totalXp) { // Ensure school and xp exist
+                        schoolData[user.school] = (schoolData[user.school] || 0) + user.totalXp;
+                    }
+                });
+                const sortedSchools = Object.entries(schoolData).sort(([, a], [, b]) => b - a).slice(0, 10);
+                return sortedSchools.map(([school, totalXp]) => ({ school, totalXp }));
+            }
+            
+            const querySnapshot = await query.get();
+            let data = [];
+            querySnapshot.forEach((doc) => data.push(doc.data()));
+            return data;
+        }
+
+        // --- UI Screen Management ---
+        function showAnalysis() {
+            const totalAnswered = problemStats.correct.length + problemStats.wrong.length;
+            const accuracy = totalAnswered > 0 ? Math.round((problemStats.correct.length / totalAnswered) * 100) : 0;
+            
+            document.getElementById('totalProblems').textContent = totalAnswered;
+            document.getElementById('accuracy').textContent = accuracy + '%';
+            
+            const sortedTypes = Object.entries(problemStats.wrongProblemTypes).sort((a, b) => b[1] - a[1]).slice(0, 3);
+            
+            const recommendationsEl = document.getElementById('recommendations');
+            if (sortedTypes.length > 0) {
+                recommendationsEl.innerHTML = `<div class="recommendation-title">🎯 추천 학습 유형</div><div class="recommendation-list">${sortedTypes.map(([type, count]) => `<div class="recommendation-item">${type} (${count}번 틀림)</div>`).join('')}</div>`;
+            } else {
+                recommendationsEl.innerHTML = `<div class="no-problems">🎉 모든 문제를 정확히 풀었어요!</div>`;
+            }
+            
+            const wrongProblemsEl = document.getElementById('wrongProblems');
+            if (problemStats.wrong.length > 0) {
+                wrongProblemsEl.innerHTML = `<div class="wrong-problems-title">❌ 틀린 문제들</div><div class="wrong-problem-list">${problemStats.wrong.map(p => `<div class="wrong-problem-item">${p.text}</div>`).join('')}</div>`;
+            } else {
+                wrongProblemsEl.innerHTML = '';
+            }
+            
+            gameOverElement.style.display = 'none';
+            analysisScreenElement.style.display = 'flex';
+        }
+
+        async function showLeaderboard(tabType = 'score') {
+            leaderboardScreenElement.style.display = 'flex';
+            leaderboardContentElement.innerHTML = `<div class="loading-spinner"></div><p class="text-center mt-4">리더보드를 불러오는 중...</p>`;
+            
+            document.getElementById('scoreTabBtn').classList.remove('active');
+            document.getElementById('xpTabBtn').classList.remove('active');
+            document.getElementById('schoolTabBtn').classList.remove('active');
+            document.getElementById(`${tabType}TabBtn`).classList.add('active');
+
+            try {
+                const data = await getLeaderboardFromFirestore(tabType);
+                let leaderboardHtml = '';
+
+                if (tabType === 'school') {
+                    leaderboardHtml = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">순위</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">학교</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">총 경험치</th>
+                    </tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+                    data.forEach((entry, index) => {
+                        leaderboardHtml += `<tr>
+                            <td class="px-6 py-4">${index + 1}</td>
+                            <td class="px-6 py-4">${entry.school}</td>
+                            <td class="px-6 py-4">${entry.totalXp}</td>
+                        </tr>`;
+                    });
+                } else {
+                     leaderboardHtml = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">순위</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">학교</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">닉네임</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">${tabType === 'score' ? '점수' : '경험치'}</th>
+                    </tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+                    data.forEach((entry, index) => {
+                        leaderboardHtml += `<tr>
+                            <td class="px-6 py-4">${index + 1}</td>
+                            <td class="px-6 py-4">${entry.school || '미입력'}</td>
+                            <td class="px-6 py-4">${entry.nickname}</td>
+                            <td class="px-6 py-4">${tabType === 'score' ? entry.score : entry.totalXp}</td>
+                        </tr>`;
+                    });
+                }
+                
+                leaderboardHtml += `</tbody></table>`;
+                leaderboardContentElement.innerHTML = leaderboardHtml;
+                
+            } catch (e) {
+                leaderboardContentElement.innerHTML = `<p class="text-center text-red-500">리더보드를 불러오는 중 오류가 발생했습니다.</p>`;
+                console.error("Error fetching leaderboard: ", e);
+            }
+        }
+        
+        function hideLeaderboard() { leaderboardScreenElement.style.display = 'none'; }
+        function hideAnalysis() { analysisScreenElement.style.display = 'none'; }
+
+        // --- Auth Functions ---
+        async function signUp() {
+            const email = document.getElementById('signUpEmailInput').value;
+            const password = document.getElementById('signUpPasswordInput').value;
+            const school = document.getElementById('signUpSchoolInput').value;
+            const nickname = document.getElementById('signUpNicknameInput').value;
+            const signUpMessage = document.getElementById('signUpMessage');
+
+             if (password.length < 6) {
+                signUpMessage.textContent = "비밀번호는 6자리 이상이어야 합니다.";
+                signUpMessage.style.color = 'red';
+                return;
+            }
+            if (!nickname || !school) {
+                signUpMessage.textContent = "학교와 이름을 모두 입력해주세요.";
+                signUpMessage.style.color = 'red';
+                return;
+            }
+            try {
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                currentUserData = { 
+                    score: 0, 
+                    totalXp: 0, 
+                    level: 1, 
+                    school, 
+                    nickname, 
+                    correctProblemTypes: {}, 
+                    wrongProblemTypes: {} 
+                };
+                currentUserId = user.uid;
+                
+                await saveUserData();
+
+                signUpMessage.textContent = "회원가입 성공! 자동으로 로그인됩니다.";
+                signUpMessage.style.color = 'green';
+                setTimeout(() => {
+                    signUpModal.style.display = 'none';
+                    showPostLoginUI();
+                }, 1000);
+            } catch (error) {
+                const errorCode = error.code;
+                signUpMessage.textContent = firebaseErrorKorean[errorCode] || '회원가입 중 오류가 발생했습니다.';
+                signUpMessage.style.color = 'red';
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+             if (!email || !password) {
+                authMessage.textContent = "이메일과 비밀번호를 모두 입력해주세요.";
+                authMessage.style.color = 'red';
+                return;
+            }
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+                authMessage.textContent = "로그인 성공!";
+                authMessage.style.color = 'green';
+                // onAuthStateChanged가 화면 전환을 처리합니다.
+            } catch (error) {
+                const errorCode = error.code;
+                authMessage.textContent = firebaseErrorKorean[errorCode] || firebaseErrorKorean['default'];
+                authMessage.style.color = 'red';
+            }
+        }
+        
+        async function startAnonymously() {
+            try {
+                await auth.signInAnonymously();
+                initializeGame();
+            } catch(e) {
+                authMessage.textContent = "익명 로그인 중 오류가 발생했습니다.";
+                authMessage.style.color = 'red';
+            }
+        }
+        
+        async function getLearningAdvice() {
+            alert("학습 조언 기능은 준비 중입니다.");
+        }
+        
+        function showPostLoginUI() {
+            document.getElementById('loginFormContainer').style.display = 'none';
+            document.getElementById('postLoginContainer').style.display = 'block';
+            document.getElementById('welcomeMessage').textContent = `${currentUserData.nickname || '사용자'}님, 환영합니다!`;
+        }
+
+        async function showProfileScreen() {
+            if (!currentUserId) {
+                alert("로그인이 필요합니다.");
+                return;
+            }
+            currentUserData = await loadUserData(currentUserId);
+            
+            document.getElementById('profileLevel').textContent = currentUserData.level;
+            document.getElementById('profileTotalXp').textContent = currentUserData.totalXp;
+            document.getElementById('profileHighScore').textContent = currentUserData.score;
+
+            const strengths = analyzeStats(currentUserData.correctProblemTypes, true);
+            const weaknesses = analyzeStats(currentUserData.wrongProblemTypes, false);
+            
+            document.getElementById('profileStrengths').textContent = strengths || '기록 없음';
+            document.getElementById('profileWeaknesses').textContent = weaknesses || '기록 없음';
+
+            startScreenElement.style.display = 'none';
+            profileScreen.style.display = 'flex';
+        }
+
+        function analyzeStats(stats, findMax) {
+            if (!stats || Object.keys(stats).length === 0) return null;
+
+            let resultType = '';
+            let bestValue = findMax ? -1 : -Infinity; // 수정: weaknesses를 위해 초기값을 -Infinity로 변경
+
+            for (const type in stats) {
+                if (findMax) {
+                    if (stats[type] > bestValue) {
+                        bestValue = stats[type];
+                        resultType = type;
+                    }
+                } else {
+                    if (stats[type] > bestValue) { // Bug fix: should find the max count for weaknesses too
+                        bestValue = stats[type];
+                        resultType = type;
+                    }
+                }
+            }
+            return resultType;
+        }
+        
+        async function logout() {
+            await auth.signOut();
+            // onAuthStateChanged가 UI를 자동으로 초기화해줍니다.
+        }
+
+
+        // --- Input Event Handlers (Keyboard, Touch, Mouse) ---
+        function handlePressStart() {
+            if (gameStarted && gameRunning && !spacePressed) {
+                spacePressed = true;
+                jumpStartTime = Date.now();
+            }
+        }
+
+        function handlePressEnd() {
+            if (gameStarted && gameRunning && spacePressed) {
+                spacePressed = false;
+                const holdTime = Date.now() - jumpStartTime;
+                jump(holdTime);
+            }
+        }
+
+        document.addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); handlePressStart(); } });
+        document.addEventListener('keyup', (e) => { if (e.code === 'Space') { e.preventDefault(); handlePressEnd(); } });
+        
+        const isInteractiveElement = (target) => target.closest('button, a, input, form');
+        
+        document.addEventListener('touchstart', (e) => { if (!isInteractiveElement(e.target)) { e.preventDefault(); handlePressStart(); } });
+        document.addEventListener('touchend', (e) => { if (!isInteractiveElement(e.target)) { e.preventDefault(); handlePressEnd(); } });
+        document.addEventListener('mousedown', (e) => { if (!isInteractiveElement(e.target)) { e.preventDefault(); handlePressStart(); } });
+        document.addEventListener('mouseup', (e) => { if (!isInteractiveElement(e.target)) { e.preventDefault(); handlePressEnd(); } });
+    </script>
+</body>
+</html>
