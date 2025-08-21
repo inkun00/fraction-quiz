@@ -258,7 +258,7 @@
         }
 
         .game-over-content, .modal-content { border-color: #e74c3c; }
-        .analysis-content { padding: 40px; border-radius: 20px; max-width: 800px; max-height: 80vh; overflow-y: auto; }
+        .analysis-content { padding: 40px; border-radius: 20px; max-width: 1100px; max-height: 80vh; overflow-y: auto; }
         
         .game-title { font-size: 48px; font-weight: bold; color: #2c3e50; margin-bottom: 20px; text-shadow: 2px 2px 4px rgba(0,0,0,0.1); }
         .game-description { font-size: 20px; color: #34495e; margin-bottom: 30px; line-height: 1.6; }
@@ -327,7 +327,7 @@
         .recommendation-item { background: #e74c3c; color: white; padding: 10px 20px; border-radius: 25px; font-size: 18px; font-weight: bold; border: 3px solid #c0392b; }
         .wrong-problems { margin-bottom: 30px; }
         .wrong-problems-title { font-size: 20px; font-weight: bold; color: #34495e; margin-bottom: 15px; text-align: center; }
-        .wrong-problem-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; max-height: 200px; overflow-y: auto; }
+        .wrong-problem-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 200px; overflow-y: auto; }
         .wrong-problem-item { background: #f8f9fa; border: 2px solid #e9ecef; padding: 10px; border-radius: 10px; text-align: center; font-size: 16px; font-weight: bold; color: #495057; }
         .analysis-buttons { display: flex; justify-content: center; gap: 15px; }
         .analysis-btn { background: #e74c3c; border: 3px solid #c0392b; margin-top: 20px; }
@@ -486,7 +486,7 @@
                 <div class="wrong-problems" id="wrongProblems"></div>
                 <div class="analysis-buttons">
                     <button id="restartBtnAnalysis" class="restart-btn">🔄 다시 하기</button>
-                    <button id="hideAnalysisBtn" class="restart-btn close">닫기</button>
+                    <button id="hideAnalysisBtn" class="restart-btn close">처음으로</button>
                 </div>
             </div>
         </div>
@@ -541,8 +541,8 @@
         // --- Firebase Variables ---
         let auth, db;
         const firebaseErrorKorean = {
-            'auth/user-not-found': '등록되지 않은 이메일입니다.',
-            'auth/wrong-password': '비밀번호가 일치하지 않습니다.',
+            'auth/user-not-found': '아이디나 비밀번호를 확인해주세요.',
+            'auth/wrong-password': '아이디나 비밀번호를 확인해주세요.',
             'auth/invalid-email': '아이디는 이메일 형식을 맞춰주세요.',
             'auth/email-already-in-use': '이미 사용 중인 이메일입니다.',
             'auth/weak-password': '비밀번호는 6자리 이상이어야 합니다.',
@@ -647,7 +647,7 @@
 
             // 분석 화면 버튼
             document.getElementById('restartBtnAnalysis').addEventListener('click', restartGame);
-            document.getElementById('hideAnalysisBtn').addEventListener('click', hideAnalysis);
+            document.getElementById('hideAnalysisBtn').addEventListener('click', restartGame);
             
             // 리더보드 화면 버튼
             document.getElementById('hideLeaderboardBtn').addEventListener('click', hideLeaderboard);
